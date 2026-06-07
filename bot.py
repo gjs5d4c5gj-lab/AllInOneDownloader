@@ -23,7 +23,6 @@ def handle_link(message):
     url = message.text.strip()
     chat_id = message.chat.id
     
-    # Havolani tozalash va tekshirish
     if "tiktok.com" in url:
         user_data[chat_id] = url
         markup = types.InlineKeyboardMarkup(row_width=2)
@@ -59,31 +58,43 @@ def callback_processing(call):
     is_mp3 = False
     status_text = "⏳ Yuklash boshlanmoqda..."
 
-    # YouTube va TikTok sozlamalarini xavfsiz formatga keltiramiz
+    # YouTube xavfsiz yuklash sozlamalari (Bloklarni buzib o'tish uchun)
+    base_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        },
+        'nocheckcertificate': True,
+        'prefer_insecure': True,
+    }
+
     if action == "tt_video":
         status_text = "⏳ TikTok video yuklanmoqda..."
-        ydl_opts = {'format': 'best', 'outtmpl': f'downloads/{chat_id}_tt_v.%(ext)s'}
+        base_opts.update({'format': 'best', 'outtmpl': f'downloads/{chat_id}_tt_v.%(ext)s'})
     elif action == "tt_mp3":
         status_text = "🎵 TikTok'dan audio ajratilmoqda..."
-        ydl_opts = {
+        base_opts.update({
             'format': 'bestaudio/best',
             'outtmpl': f'downloads/{chat_id}_tt_a.%(ext)s',
             'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
-        }
+        })
         is_mp3 = True
     elif action == "yt_720":
         status_text = "⏳ YouTube video 720p formatda yuklanmoqda..."
-        ydl_opts = {'format': 'best[height<=720]', 'outtmpl': f'downloads/{chat_id}_yt_720.%(ext)s', 'merge_output_format': 'mp4'}
+        base_opts.update({'format': 'best[height<=720]/best', 'outtmpl': f'downloads/{chat_id}_yt_720.%(ext)s'})
     elif action == "yt_360":
         status_text = "⏳ YouTube video 360p formatda yuklanmoqda..."
-        ydl_opts = {'format': 'best[height<=360]', 'outtmpl': f'downloads/{chat_id}_yt_360.%(ext)s', 'merge_output_format': 'mp4'}
+        base_opts.update({'format': 'best[height<=360]/best', 'outtmpl': f'downloads/{chat_id}_yt_360.%(ext)s'})
     elif action == "yt_mp3":
         status_text = "🎵 YouTubedan audio ajratilmoqda..."
-        ydl_opts = {
+        base_opts.update({
             'format': 'bestaudio/best',
             'outtmpl': f'downloads/{chat_id}_yt_a.%(ext)s',
             'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
-        }
+        })
         is_mp3 = True
 
     bot.edit_message_text(status_text, chat_id, call.message.message_id, reply_markup=None)
@@ -91,7 +102,7 @@ def callback_processing(call):
     if not os.path.exists("downloads"):
         os.makedirs("downloads")
         
-    file_path = download_process(url, ydl_opts)
+    file_path = download_process(url, base_opts)
     
     if is_mp3 and file_path:
         base, ext = os.path.splitext(file_path)
@@ -101,18 +112,14 @@ def callback_processing(call):
     send_and_clean(chat_id, file_path, call.message, is_mp3)
 
 def download_process(url, ydl_opts):
-    # Eng muhim qismi: Brauzer kabi ko'rinish beramiz (Blokga tushmaslik uchun)
-    ydl_opts['http_headers'] = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    ydl_opts['quiet'] = True
-    ydl_opts['no_warnings'] = True
-    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+            
             if not os.path.exists(filename):
                 base = filename.rsplit('.', 1)[0]
-                for ext in ['.mp4', '.mkv', '.webm', '.mp3']:
+                for ext in ['.mp4', '.mkv', '.webm', '.mp3', '.m4a']:
                     if os.path.exists(base + ext):
                         return base + ext
             return filename
@@ -132,12 +139,12 @@ def send_and_clean(chat_id, file_path, msg_to_update, is_mp3=False):
             os.remove(file_path)
             bot.delete_message(chat_id, msg_to_update.message_id)
         except Exception as e:
-            bot.edit_message_text(f"❌ Faylni yuborishda xatolik: {str(e)[:50]}", chat_id, msg_to_update.message_id)
+            bot.edit_message_text("❌ Faylni yuborishda xatolik yuz berdi.", chat_id, msg_to_update.message_id)
     else:
-        bot.edit_message_text("❌ Yuklab bo'lmadi. Video juda katta yoki YouTube cheklov qo'ygan.", chat_id, msg_to_update.message_id)
+        bot.edit_message_text("❌ Yuklab bo'lmadi. Havola xato yoki YouTube yuklashni blokladi.", chat_id, msg_to_update.message_id)
         
     if chat_id in user_data:
         del user_data[chat_id]
 
-print("Yangilangan downloader ishga tushdi...")
+print("Katta hajmli yuklovchi ishga tushdi...")
 bot.infinity_polling()
