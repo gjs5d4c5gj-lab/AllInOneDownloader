@@ -3,7 +3,7 @@ from telebot import types
 import requests
 import os
 
-# BotFather'dan olgan bot tokeningizni shu yerga qo'ying
+# Bot tokeningizni shu yerga aniq qo'ying
 BOT_TOKEN = '8997436001:AAG5p4zvAmGOHDViQAJkfsD1DAxGe9ojqqI'
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -14,8 +14,8 @@ def welcome(message):
     bot.send_message(
         message.chat.id,
         "👋 **Assalomu alaykum!**\n\n"
-        "🎬 Men har qanday hajmdagi TikTok va YouTube videolarini, shuningdek musiqalarini (MP3) yuklovchi super botman!\n\n"
-        "👉 Menga shunchaki video havolasini (linkini) yuboring."
+        "🎬 TikTok va YouTube videolarini hamda musiqalarini (MP3) yuklovchi botga xush kelibsiz!\n\n"
+        "👉 Menga shunchaki video havolasini yuboring."
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -51,34 +51,39 @@ def callback_processing(call):
         bot.answer_callback_query(call.id, "❌ Havola topilmadi. Qaytadan yuboring.", show_alert=True)
         return
 
-    bot.edit_message_text("⏳ Tizim bloklarni aylanib o'tmoqda, yuklash boshlandi...", chat_id, call.message.message_id, reply_markup=None)
+    bot.edit_message_text("⏳ Yuklash jarayoni boshlandi, iltimos kuting...", chat_id, call.message.message_id, reply_markup=None)
     
-    # Tashqi professional yuklovchi API xizmati
-    api_url = f"https://api.cobalt.tools/api/json"
+    # Cobalt API ning eng barqaror manzili
+    api_url = "https://api.cobalt.tools/api/json"
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
     
-    # Agar MP3 so'ralgan bo'lsa API ga faqat audio kerakligini aytamiz
-    is_audio = "mp3" in action
+    is_audio = "mp3" in action or "tt_mp3" in action
+    
+    # API talablariga mos g'ırt sodda va toza sozlamalar
     payload = {
         "url": url,
-        "isAudioOnly": is_audio,
-        "vQuality": "720"
+        "filenamePattern": "basic"
     }
+    
+    if is_audio:
+        payload["isAudioOnly"] = True
 
     try:
-        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+        response = requests.post(api_url, json=payload, headers=headers, timeout=20)
         result = response.json()
         
-        if result.get("status") == "stream" or result.get("status") == "picker":
-            # Yuklab olish uchun to'g'ridan-to'g'ri havola
-            download_link = result.get("url")
+        if result.get("status") == "error":
+            bot.edit_message_text(f"❌ API Xatoligi: {result.get('text', 'Noma`lum xato')}", chat_id, call.message.message_id)
+            return
             
-            bot.edit_message_text("🚀 Telegram serveriga xavfsiz uzatilmoqda...", chat_id, call.message.message_id)
+        download_link = result.get("url")
+        
+        if download_link:
+            bot.edit_message_text("🚀 Fayl Telegramga yuklanmoqda...", chat_id, call.message.message_id)
             
-            # Faylni oqimli (stream) yuklab olamiz (Katta hajmli fayllar serverni qotirmasligi uchun)
             file_response = requests.get(download_link, stream=True, timeout=120)
             file_name = f"download_{chat_id}.mp3" if is_audio else f"download_{chat_id}.mp4"
             
@@ -87,29 +92,26 @@ def callback_processing(call):
                     if chunk:
                         f.write(chunk)
             
-            # Tayyor faylni foydalanuvchiga yuborish
             with open(file_name, 'rb') as f:
                 if is_audio:
                     bot.send_audio(chat_id, f, caption=f"🎵 **Musiqa tayyor!**\n\n⚡ @{bot.get_me().username}")
                 else:
                     bot.send_video(chat_id, f, caption=f"🎬 **Video tayyor!**\n\n⚡ @{bot.get_me().username}")
             
-            # Vaqtinchalik faylni o'chiramiz
             if os.path.exists(file_name):
                 os.remove(file_name)
                 
             bot.delete_message(chat_id, call.message.message_id)
-            
         else:
-            bot.edit_message_text("❌ Ushbu videoni yuklab bo'lmadi. Havola muallif tomonidan yopilgan bo'lishi mumkin.", chat_id, call.message.message_id)
+            bot.edit_message_text("❌ Yuklab olish havolasini shakllantirib bo'lmadi.", chat_id, call.message.message_id)
             
     except Exception as e:
-        bot.edit_message_text(f"❌ Yuklashda xatolik yuz berdi. Iltimos keyinroq qayta urining.", chat_id, call.message.message_id)
+        bot.edit_message_text("❌ Tizimda vaqtincha uzilish yuz berdi. Qaytadan urinib ko'ring.", chat_id, call.message.message_id)
         if 'file_name' in locals() and os.path.exists(file_name):
             os.remove(file_name)
 
     if chat_id in user_data:
         del user_data[chat_id]
 
-print("Yangi bloklarsiz downloader ishga tushdi...")
+print("Yangi tahrirlangan bot ishga tushdi...")
 bot.infinity_polling()
