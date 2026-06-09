@@ -3,7 +3,7 @@ from telebot import types
 import requests
 import os
 
-# Tokenlarni Railway Environment Variables (O'zgaruvchilar) qismidan xavfsiz olamiz
+# Tokenlarni Railway Variables qismidan o'qiydi
 BOT_TOKEN = os.getenv('8997436001:AAG5p4zvAmGOHDViQAJkfsD1DAxGe9ojqqI')
 RAPIDAPI_KEY = os.getenv('curl --request POST \
 	--url https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink \
@@ -11,18 +11,16 @@ RAPIDAPI_KEY = os.getenv('curl --request POST \
 	--header 'x-rapidapi-host: auto-download-all-in-one.p.rapidapi.com' \
 	--data '{"url":"https://www.tiktok.com/@yeuphimzz/video/7237370304337628442"}'')
 
-if not BOT_TOKEN or not RAPIDAPI_KEY:
-    print("Xatolik: BOT_TOKEN yoki RAPIDAPI_KEY tizimga kiritilmagan!")
-    exit(1)
-
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(8997436001:AAG5p4zvAmGOHDViQAJkfsD1DAxGe9ojqqI)
 user_data = {}
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
     bot.send_message(
         message.chat.id,
-        "👋 **Assalomu alaykum!**\n\n🎬 TikTok va YouTube platformalaridan fayllarni yuklovchi botga xush kelibsiz!\n\n👉 Havola yuboring:"
+        "👋 **Assalomu alaykum!**\n\n"
+        "🎬 TikTok va YouTube platformalaridan video hamda musiqalarni yuklovchi botga xush kelibsiz!\n\n"
+        "👉 Menga havola yuboring."
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -36,7 +34,7 @@ def handle_link(message):
         btn_video = types.InlineKeyboardButton("🎬 Original Video", callback_data="get_video")
         btn_audio = types.InlineKeyboardButton("🎵 MP3 Audio", callback_data="get_audio")
         markup.add(btn_video, btn_audio)
-        bot.send_message(chat_id, "✨ Havola aniqlandi! Formatni tanlang:", reply_markup=markup)
+        bot.send_message(chat_id, "✨ Formatni tanlang:", reply_markup=markup)
     else:
         bot.send_message(chat_id, "⚠️ Iltimos, faqat YouTube yoki TikTok havolasini yuboring!")
 
@@ -50,7 +48,7 @@ def callback_processing(call):
         bot.answer_callback_query(call.id, "❌ Havola topilmadi.", show_alert=True)
         return
 
-    bot.edit_message_text("⏳ Yuklash boshlandi...", chat_id, call.message.message_id, reply_markup=None)
+    bot.edit_message_text("⏳ Tizim faylni yuklashni boshladi...", chat_id, call.message.message_id, reply_markup=None)
     
     api_url = "https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink"
     headers = {
@@ -64,6 +62,7 @@ def callback_processing(call):
         response = requests.post(api_url, json=payload, headers=headers, timeout=30)
         result = response.json()
         
+        # Olingan JSON ma'lumotni tekshirish
         if result.get("success") and result.get("links"):
             links = result.get("links")
             download_link = None
@@ -77,10 +76,11 @@ def callback_processing(call):
                 if not download_link:
                     download_link = links[0].get("url")
             else:
+                # Birinchi turgan video havolasini olish
                 download_link = links[0].get("url")
 
             if download_link:
-                bot.edit_message_text("🚀 Fayl Telegram serveriga uzatilyapti...", chat_id, call.message.message_id)
+                bot.edit_message_text("🚀 Telegram serveriga yuklanyapti...", chat_id, call.message.message_id)
                 
                 file_response = requests.get(download_link, stream=True, timeout=120)
                 file_name = f"file_{chat_id}.mp3" if is_audio else f"file_{chat_id}.mp4"
@@ -92,25 +92,25 @@ def callback_processing(call):
                 
                 with open(file_name, 'rb') as f:
                     if is_audio:
-                        bot.send_audio(chat_id, f, caption=f"🎵 Musiqa tayyor! @{bot.get_me().username}")
+                        bot.send_audio(chat_id, f, caption="🎵 Musiqa yuklandi!")
                     else:
-                        bot.send_video(chat_id, f, caption=f"🎬 Video tayyor! @{bot.get_me().username}")
+                        bot.send_video(chat_id, f, caption="🎬 Video yuklandi!")
                 
                 if os.path.exists(file_name):
                     os.remove(file_name)
                 bot.delete_message(chat_id, call.message.message_id)
             else:
-                bot.edit_message_text("❌ Yuklab olish havolasi topilmadi.", chat_id, call.message.message_id)
+                bot.edit_message_text("❌ Yuklab olish manzili topilmadi.", chat_id, call.message.message_id)
         else:
-            bot.edit_message_text("❌ Tizim videoni o'qiy olmadi.", chat_id, call.message.message_id)
+            bot.edit_message_text("❌ API xatoligi yoki havola noto'g'ri.", chat_id, call.message.message_id)
             
     except Exception as e:
-        bot.edit_message_text("❌ Xatolik yuz berdi. Birozdan so'ng qayta urining.", chat_id, call.message.message_id)
+        bot.edit_message_text(f"❌ Xatolik: {str(e)}", chat_id, call.message.message_id)
         if 'file_name' in locals() and os.path.exists(file_name):
             os.remove(file_name)
 
     if chat_id in user_data:
         del user_data[chat_id]
 
-print("Bot muvaffaqiyatli yurgizildi...")
+print("Bot ishlamoqda...")
 bot.infinity_polling()
