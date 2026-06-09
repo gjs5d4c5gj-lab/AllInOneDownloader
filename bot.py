@@ -3,13 +3,17 @@ from telebot import types
 import requests
 import os
 
-# Bot tokeningiz va RapidAPI kalitingizni shu yerga kiriting
-BOT_TOKEN = '8997436001:AAG5p4zvAmGOHDViQAJkfsD1DAxGe9ojqqI'
-RAPIDAPI_KEY = curl --request POST \
+# Tokenlarni Railway Environment Variables (O'zgaruvchilar) qismidan xavfsiz olamiz
+BOT_TOKEN = os.getenv('8997436001:AAG5p4zvAmGOHDViQAJkfsD1DAxGe9ojqqI')
+RAPIDAPI_KEY = os.getenv('curl --request POST \
 	--url https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink \
 	--header 'Content-Type: application/json' \
 	--header 'x-rapidapi-host: auto-download-all-in-one.p.rapidapi.com' \
-	--data '{"url":"https://www.tiktok.com/@yeuphimzz/video/7237370304337628442"}'
+	--data '{"url":"https://www.tiktok.com/@yeuphimzz/video/7237370304337628442"}'')
+
+if not BOT_TOKEN or not RAPIDAPI_KEY:
+    print("Xatolik: BOT_TOKEN yoki RAPIDAPI_KEY tizimga kiritilmagan!")
+    exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 user_data = {}
@@ -18,9 +22,7 @@ user_data = {}
 def welcome(message):
     bot.send_message(
         message.chat.id,
-        "👋 **Assalomu alaykum!**\n\n"
-        "🎬 TikTok va YouTube platformalaridan video hamda yuqori sifatli musiqalarni (MP3) bittada yuklovchi professional botga xush kelibsiz!\n\n"
-        "👉 Menga shunchaki video havolasini yuboring."
+        "👋 **Assalomu alaykum!**\n\n🎬 TikTok va YouTube platformalaridan fayllarni yuklovchi botga xush kelibsiz!\n\n👉 Havola yuboring:"
     )
 
 @bot.message_handler(func=lambda message: True)
@@ -34,7 +36,7 @@ def handle_link(message):
         btn_video = types.InlineKeyboardButton("🎬 Original Video", callback_data="get_video")
         btn_audio = types.InlineKeyboardButton("🎵 MP3 Audio", callback_data="get_audio")
         markup.add(btn_video, btn_audio)
-        bot.send_message(chat_id, "✨ Havola aniqlandi! Yuklash formatini tanlang:", reply_markup=markup)
+        bot.send_message(chat_id, "✨ Havola aniqlandi! Formatni tanlang:", reply_markup=markup)
     else:
         bot.send_message(chat_id, "⚠️ Iltimos, faqat YouTube yoki TikTok havolasini yuboring!")
 
@@ -45,25 +47,20 @@ def callback_processing(call):
     url = user_data.get(chat_id)
     
     if not url:
-        bot.answer_callback_query(call.id, "❌ Havola topilmadi. Qaytadan yuboring.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ Havola topilmadi.", show_alert=True)
         return
 
-    bot.edit_message_text("⏳ Tizim bloklarni aylanib o'tib, faylni yuklashni boshladi...", chat_id, call.message.message_id, reply_markup=None)
+    bot.edit_message_text("⏳ Yuklash boshlandi...", chat_id, call.message.message_id, reply_markup=None)
     
-    # API talab qilgan aniq POST manzili
     api_url = "https://auto-download-all-in-one.p.rapidapi.com/v1/social/autolink"
-    
     headers = {
         "Content-Type": "application/json",
         "X-RapidAPI-Key": RAPIDAPI_KEY,
         "X-RapidAPI-Host": "auto-download-all-in-one.p.rapidapi.com"
     }
-    
-    # Havola JSON formatida yuboriladi (Sizning skrinshotingiz asosida)
     payload = {"url": url}
 
     try:
-        # GET emas, aynan POST so'rovi yuborilmoqda
         response = requests.post(api_url, json=payload, headers=headers, timeout=30)
         result = response.json()
         
@@ -95,9 +92,9 @@ def callback_processing(call):
                 
                 with open(file_name, 'rb') as f:
                     if is_audio:
-                        bot.send_audio(chat_id, f, caption=f"🎵 **Musiqa muvaffaqiyatli yuklandi!**\n\n⚡ @{bot.get_me().username}")
+                        bot.send_audio(chat_id, f, caption=f"🎵 Musiqa tayyor! @{bot.get_me().username}")
                     else:
-                        bot.send_video(chat_id, f, caption=f"🎬 **Video muvaffaqiyatli yuklandi!**\n\n⚡ @{bot.get_me().username}")
+                        bot.send_video(chat_id, f, caption=f"🎬 Video tayyor! @{bot.get_me().username}")
                 
                 if os.path.exists(file_name):
                     os.remove(file_name)
@@ -105,15 +102,15 @@ def callback_processing(call):
             else:
                 bot.edit_message_text("❌ Yuklab olish havolasi topilmadi.", chat_id, call.message.message_id)
         else:
-            bot.edit_message_text("❌ Tizim videoni o'qiy olmadi. Havola yopiq yoki noto'g'ri.", chat_id, call.message.message_id)
+            bot.edit_message_text("❌ Tizim videoni o'qiy olmadi.", chat_id, call.message.message_id)
             
     except Exception as e:
-        bot.edit_message_text("❌ Tashqi server javob bermadi. Bir ozdan so'ng qayta urinib ko'ring.", chat_id, call.message.message_id)
+        bot.edit_message_text("❌ Xatolik yuz berdi. Birozdan so'ng qayta urining.", chat_id, call.message.message_id)
         if 'file_name' in locals() and os.path.exists(file_name):
             os.remove(file_name)
 
     if chat_id in user_data:
         del user_data[chat_id]
 
-print("Yangi Premium Bot 100% aktiv holatda ishga tushdi...")
+print("Bot muvaffaqiyatli yurgizildi...")
 bot.infinity_polling()
